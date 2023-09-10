@@ -1,0 +1,92 @@
+--- package written in sql that contains a procedure and 2 cursors for grabbing data based on user input. This uses a row_number
+--- window function to sequence the rows without extra permissions and avoiding triggers. This is helpful when working with and ERP
+--- that overrides any changes that are made to tables. In this particular sample the seqno column had reached it's 3 integer max 
+--- but there was plenty of space left. This modification was accomodated by the merge into script  Merge_sequence to take advantage of 
+--- the unused realestate.
+
+
+
+
+create or replace PACKAGE BODY Job1 as 
+
+procedure insert_comments(  Year_       schema1.table1.Some_column%type,
+                            Code        schema1.table2.Some_column%type,
+                            Column_4    schema2.table3.Some_column_1%type,
+                            Column_5    schema2.table3.Some_column_2%type,
+                            CID         schema2.table3.Some_column_3%type,
+                            UID_        schema2.table3.Some_column_4%type) AS
+
+cursor grabdata_cursor is
+select needed_column
+from table4
+where code = 'some_code';
+--
+cursor grabdata_sequence is
+
+with pop_sel as         
+                                                      (select table3.keys,
+                             nvl(max(rhrcomm_seqno),0) max_seqno
+                                from table2,table3
+                                where table2.keys = table3.keys
+                                and table3.Some_column_1= input1
+                                and table3.Some_column_2= input2
+                                and table3.Some_column_3= input3
+                                and table3.Some_column_4= input4
+                           
+                            and NOT EXISTS
+                            (select 1 from table2
+                             where  table2.keys = table3.keys
+                             and table2_comment = (select needed_column
+                                                     from table4
+                                                     where code = 'some_code'))
+                            group by table3.keys)
+select pop_sel.table3.keys,
+max_seqno + row_number() over (partition by pop_sel.table3.keys order by 1 ) max_seqno
+from pop_sel
+
+
+;
+
+keys       schema6.table6.keys%type;
+comm       schema1.table4.needed_column%type;
+max_seqno  schema1.table2.seqno%type;
+message      varchar2(200);
+
+BEGIN
+
+open grabdata_cursor;
+fetch grabdata_cursor into comm;
+close grabdata_cursor;
+--
+open grabdata_sequence;
+loop
+fetch grabdata_sequence into keys,max_seqno;
+exit when grabdata_sequence%notfound;
+dbms_output.put_line('Processing full time student: ' || keys || ',' ||max_seqno);
+
+Begin
+      insert into table2 (keys,seqno,user_id,
+                          date_3,date_2,                                          	         
+                          years,comments,
+                          codes)
+      values (keys,
+              max_seqno,
+              user,
+              sysdate,
+              sysdate,
+              year_,
+              comm,
+              code);
+
+     EXCEPTION WHEN OTHERS THEN
+       message := substr('ERROR calling: Key=' || keys||' max_seqno= '||max_seqno || ' Error: '|| SQLCODE||' - '||SQLERRM || ' ' || DBMS_UTILITY.FORMAT_ERROR_BACKTRACE, 1, 200);
+       --print the error to the lis file
+       dbms_output.put_line(message);
+       schema.emailer.send_short_email('youremail@domain.com','youremail@domain.com',message,'Job1 FAILED');  
+     end; 
+end loop;      
+commit;
+
+
+ END grabdata_comments;
+End Job1                           
